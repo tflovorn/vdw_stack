@@ -1,0 +1,11 @@
+[package]
+name = "vdw_stack"
+version = "0.1.0"
+authors = ["Tim Lovorn <tflovorn@austin.utexas.edu>"]
+
+[dependencies]
+ndarray = "*"
+
+[[bin]]
+name = "enumerate_layer_supercell"
+path = "src/bin/enumerate_layer_supercell.rs"
