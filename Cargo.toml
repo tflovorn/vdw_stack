@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Tim Lovorn <tflovorn@austin.utexas.edu>"]
 
 [dependencies]
+tightbinding = { path = "../tightbinding" }
 ndarray = "*"
 
 [dev-dependencies]
