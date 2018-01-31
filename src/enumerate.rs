@@ -13,7 +13,11 @@ use ndarray::Array1;
 /// # Panics
 ///
 /// Will panic if max_error <= 0.
-pub fn enumerate(lat_vecs: &[[Array1<f64>; 2]; 2], max_repeat: u16, max_error: f64) -> Vec<([[i64; 2]; 2], f64, f64, f64)> {
+pub fn enumerate(
+    lat_vecs: &[[Array1<f64>; 2]; 2],
+    max_repeat: u16,
+    max_error: f64,
+) -> Vec<([[i64; 2]; 2], f64, f64, f64)> {
     if max_error <= 0.0 {
         panic!("must have `max_error` > 0");
     }
