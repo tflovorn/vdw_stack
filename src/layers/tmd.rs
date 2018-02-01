@@ -1,6 +1,7 @@
-use ndarray::{Array2, arr1, arr2};
-use atoms::{AtomPosition, LengthUnits, PositionList, Shift};
-use layers::Layer;
+use ndarray::{Array2, arr1};
+use atoms::{AtomPosition, LengthUnits, Shift};
+use layers::{d_triangular, Layer};
+use layers::multilayer::Multilayer;
 
 /// Transition metal dichalcogenide in triangular lattice with minimal (3-atom) unit cell.
 #[derive(Debug, Clone)]
@@ -49,25 +50,13 @@ impl TMD {
             stacking_type,
         }
     }
-
-    /// The matrix of lattice vectors,
-    /// ```
-    /// D = [[a1x, a2x,
-    ///       a1y, a2y]]
-    /// ```
-    fn d(&self) -> Array2<f64> {
-        arr2(&[
-            [1.0 / 2.0, 1.0 / 2.0],
-            [-3.0_f64.sqrt() / 2.0, 3.0_f64.sqrt() / 2.0],
-        ]) * self.a
-    }
 }
 
 impl Layer for TMD {
     fn atoms(&self) -> Vec<AtomPosition> {
         let a_lat = arr1(&[0.0, 0.0]);
         let b_lat = arr1(&[1.0 / 3.0, 2.0 / 3.0]);
-        let d = self.d();
+        let d = d_triangular(self.a);
 
         let a_cart = d.dot(&a_lat);
         let b_cart = d.dot(&b_lat);
@@ -94,6 +83,10 @@ impl Layer for TMD {
         );
 
         vec![x_bot, m, x_top]
+    }
+
+    fn lat_vecs(&self) -> (Array2<f64>, LengthUnits) {
+        (d_triangular(self.a), self.units)
     }
 }
 
@@ -139,82 +132,40 @@ mod tests {
     }
 }
 
-/// Transition metal dichalcogenide multilayer.
+/// Create a TMD bilayer where both layers are the same material.
 ///
-/// `shift` must have one fewer entry than `layers`. The bottom layer is unshifted.
+/// # Arguments
 ///
-/// # TODO
-///
-/// Const generics would allow for the expected size of the `Vec` fields to be expressed at
-/// compile-time using arrays.
-pub struct Multilayer {
-    /// Each TMD layer in the multilayer.
-    pub layers: Vec<TMD>,
-    /// The displacement by which each layer is shifted relative to the bottom layer.
-    /// (x, y) components give the lateral shift (allowing the various local configurations
-    /// seen in the moire pattern) and the z component gives the total vertical displacement.
-    pub shifts: Vec<Shift>,
-}
+/// * `bottom_layer` - The bottom layer of the bilayer.
+/// The top layer is identical, except that it is chosen to have the opposite stacking
+/// configuration (ABA <=> BAB) and is shifted upward.
+/// * `metal_distance` - vertical distance between the metal atoms.
+pub fn new_2h_bilayer(bottom_layer: &TMD, metal_distance: f64) -> Multilayer {
+    let top_stacking = match bottom_layer.stacking_type {
+        TMDStacking::ABA => TMDStacking::BAB,
+        TMDStacking::BAB => TMDStacking::ABA,
+    };
+    let top_layer = TMD::new(
+        &bottom_layer.m_species,
+        &bottom_layer.x_species,
+        bottom_layer.units,
+        bottom_layer.a,
+        bottom_layer.h,
+        top_stacking,
+    );
 
-impl Multilayer {
-    /// Create a TMD bilayer where both layers are the same material.
-    ///
-    /// # Arguments
-    ///
-    /// * `bottom_layer` - The bottom layer of the bilayer.
-    /// The top layer is identical, except that it is chosen to have the opposite stacking
-    /// configuration (ABA <=> BAB) and is shifted upward.
-    /// * `metal_distance` - vertical distance between the metal atoms.
-    pub fn new_2h_bilayer(bottom_layer: &TMD, metal_distance: f64) -> Multilayer {
-        let top_stacking = match bottom_layer.stacking_type {
-            TMDStacking::ABA => TMDStacking::BAB,
-            TMDStacking::BAB => TMDStacking::ABA,
-        };
-        let top_layer = TMD::new(
-            &bottom_layer.m_species,
-            &bottom_layer.x_species,
-            bottom_layer.units,
-            bottom_layer.a,
-            bottom_layer.h,
-            top_stacking,
-        );
+    let shifts = vec![
+        Shift {
+            cartesian: [0.0, 0.0, metal_distance],
+            units: bottom_layer.units,
+        },
+    ];
+    let repeat_count = vec![[1, 1], [1, 1]];
 
-        let layers = vec![bottom_layer.clone(), top_layer];
-        let shifts = vec![
-            Shift {
-                cartesian: [0.0, 0.0, metal_distance],
-                units: bottom_layer.units,
-            },
-        ];
-
-        Multilayer { layers, shifts }
-    }
-}
-
-impl Layer for Multilayer {
-    /// # Panics
-    ///
-    /// Panics if self.shifts.len() != self.layers.len() - 1.
-    fn atoms(&self) -> Vec<AtomPosition> {
-        if self.shifts.len() != self.layers.len() - 1 {
-            panic!("must have one fewer shift than number of layers (bottom layer is unshifted)");
-        }
-
-        let mut atoms = Vec::new();
-
-        for layer_index in 0..self.layers.len() {
-            let layer = &self.layers[layer_index];
-
-            let layer_atoms = if layer_index == 0 {
-                layer.atoms()
-            } else {
-                layer.atoms().shift(&self.shifts[layer_index - 1])
-            };
-
-            atoms.extend(layer_atoms.iter().cloned());
-        }
-
-        atoms
+    Multilayer {
+        layers: vec![Box::new(bottom_layer.clone()), Box::new(top_layer)],
+        shifts,
+        repeat_count,
     }
 }
 
